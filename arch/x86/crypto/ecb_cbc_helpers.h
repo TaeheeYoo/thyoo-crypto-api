@@ -11,18 +11,31 @@
  * having to rely on indirect calls and retpolines.
  */
 
+#define ECB_CBC_WALK_MAX	4096
+
 #define ECB_WALK_START(req, bsize, fpu_blocks) do {			\
 	void *ctx = crypto_skcipher_ctx(crypto_skcipher_reqtfm(req));	\
+	unsigned int walked_bytes = 0;					\
 	const int __bsize = (bsize);					\
 	struct skcipher_walk walk;					\
-	int err = skcipher_walk_virt(&walk, (req), false);		\
+	int err;							\
+									\
+	err = skcipher_walk_virt(&walk, (req), false);			\
 	while (walk.nbytes > 0) {					\
-		unsigned int nbytes = walk.nbytes;			\
-		bool do_fpu = (fpu_blocks) != -1 &&			\
-			      nbytes >= (fpu_blocks) * __bsize;		\
 		const u8 *src = walk.src.virt.addr;			\
-		u8 *dst = walk.dst.virt.addr;				\
 		u8 __maybe_unused buf[(bsize)];				\
+		u8 *dst = walk.dst.virt.addr;				\
+		unsigned int nbytes;					\
+		bool do_fpu;						\
+									\
+		if (walk.nbytes - walked_bytes >= ECB_CBC_WALK_MAX)	\
+			nbytes = ECB_CBC_WALK_MAX;			\
+		else							\
+			nbytes = walk.nbytes - walked_bytes;		\
+		walked_bytes += nbytes;					\
+									\
+		do_fpu = (fpu_blocks) != -1 &&				\
+			 nbytes >= (fpu_blocks) * __bsize;		\
 		if (do_fpu) kernel_fpu_begin()
 
 #define CBC_WALK_START(req, bsize, fpu_blocks)				\
@@ -66,7 +79,9 @@
 
 #define ECB_WALK_END()							\
 		if (do_fpu) kernel_fpu_end();				\
+		if (walked_bytes < walk.nbytes) continue;		\
 		err = skcipher_walk_done(&walk, nbytes);		\
+		walked_bytes = 0;					\
 	}								\
 	return err;							\
 } while (0)
