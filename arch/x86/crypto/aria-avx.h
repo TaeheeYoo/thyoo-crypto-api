@@ -4,9 +4,6 @@
 
 #include <linux/types.h>
 
-#define ARIA_AESNI_PARALLEL_BLOCKS 16
-#define ARIA_AESNI_PARALLEL_BLOCK_SIZE  (ARIA_BLOCK_SIZE * 16)
-
 struct aria_avx_ops {
 	void (*aria_encrypt_16way)(const void *ctx, u8 *dst, const u8 *src);
 	void (*aria_decrypt_16way)(const void *ctx, u8 *dst, const u8 *src);
